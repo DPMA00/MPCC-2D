@@ -1,11 +1,10 @@
 #include "MPCC.hpp"
 #include <iostream>
-#include <chrono>
 
 int main()
 {
     ParametricSpline spline(T2_NATURAL_BOUNDARY_SPLINE);    
-    MPCC mpcc(50, 0.1, spline);
+    MPCC mpcc(100, 0.1, spline);
 
     mpcc.configure_dynamics(DIFFDRIVE, EXPL_RK4);
     mpcc.config_projection(NEWTON_STEP, 100, 1.0e-6);

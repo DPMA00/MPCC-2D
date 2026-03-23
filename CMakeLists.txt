@@ -20,10 +20,10 @@ target_link_libraries(mpcc_core_lib
     Eigen3::Eigen
     qpOASES)
 
-option(BUILD_SPLINE_TEST "Build spline test executable" ON)
-if(BUILD_SPLINE_TEST)
-    add_executable(SplineTest test/main.cpp)
-    target_link_libraries(SplineTest mpcc_core_lib)
+option(BUILD_TESTS "Build all test executables" ON)
+if(BUILD_TESTS)
+    add_executable(Test1 test/main.cpp)
+    target_link_libraries(Test1 mpcc_core_lib)
 endif()
 
 

@@ -14,6 +14,9 @@ ParametricSpline::~ParametricSpline()
 
 void ParametricSpline::configure_newton(const NewtonConfig& config)
 {
+    /*
+        Defines configuration settings for the newton type projection method.
+    */
     newton_config_ = config;
 }
 
@@ -21,7 +24,10 @@ void ParametricSpline::configure_newton(const NewtonConfig& config)
 std::vector<double> ParametricSpline::compute_arc_lengths(const waypoints& points)
 {
     /*
-    \brief 
+        Computes the approximate arc lengths up until the last waypoint by calculating the euclidean norm
+        between consecutive waypoints. 
+        
+        Each cumulative arclength is stored in the new parameter s.
     */
     const auto& x = points.x;
     const auto& y = points.y;
@@ -43,6 +49,14 @@ std::vector<double> ParametricSpline::compute_arc_lengths(const waypoints& point
 
 void ParametricSpline::update_path(const waypoints& points)
 {
+    /*
+        Updates parametric spline representation of the path from the given waypoints.
+        
+        The waypoint sequence is first converted into arc-length parameter s.
+        The x and y coordinates are then re-parametrized with respect to s, and two cubic splines are constructed:
+            -x(s)
+            -y(s)
+    */
     s_ = compute_arc_lengths(points);
     waypoints points_sx;
     waypoints points_sy;
@@ -62,12 +76,30 @@ void ParametricSpline::update_path(const waypoints& points)
 
 std::vector<double> ParametricSpline::get_arc_lengths() const
 {
+    // Returns the parameter vector s.
     return s_;
 }
 
 
 PathDat ParametricSpline::evalf_diff(double s)
 {
+    /*
+        Evaluates necessary function values, derivatives and second derivatives of the reference path at s.
+
+        The spline segment where the value of s corresponds with is first determined to evaluate all PathDat entries:
+
+            - X_ref(s)
+            - Y_ref(s)
+            - ∂X_ref(s)/∂s
+            - ∂Y_ref(s)/∂s  
+            - φ(s)
+            - ∂²X_ref(s)/∂s²
+            - ∂²Y_ref(s)/∂s²
+            - ∂φ(s)/∂s
+        
+            These are then returned into Pathdat eval.        
+
+    */
     int k = spline_sx_.get_segment(s);
 
     PathDat eval;
@@ -85,6 +117,10 @@ PathDat ParametricSpline::evalf_diff(double s)
 
 double ParametricSpline::local_search(const double initial_guess, const Eigen::Vector2d& point)
 {
+    /*
+        The selected search method evaluates the nearest path parameter s to the given point
+        using a local search around the initial guess for s.
+    */
     switch(method)
     {
         case NEWTON_STEP:
@@ -102,8 +138,22 @@ double ParametricSpline::local_search(const double initial_guess, const Eigen::V
 double ParametricSpline::newton_search(bool global,const double initial_guess, const Eigen::Vector2d& point)
 {
     /*
-    \brief Performs newton iterations over 
+        Uses Newton's method to compute the path parameter s corresponding to a local projection of the query point
+        on to the path.
+        
+        The method a small nonlinear optimization problem that seeks to minimize the squared
+        Euclidean distance between the query point (x,y) and the path point C(s) = [C_x(s), C_y(s)]:
 
+                                R(s) = (x-C_x(s))^2 + (y-C_y(s))^2
+
+        A Newton iteration is applied to the first order optimality condition
+                                        R'(s) = 0
+        using the update:
+        s_{i+1} = s_i - R'(s_i)/R''(s_i)
+
+        The initial guess determines the starting point of the search and therefore can strongly influence the
+        solution obtained. At each iteration the spline segment corresponding to the current value of s is used
+        to evaluate the path and its derivatives.
     */
     
     const double x = point(0);

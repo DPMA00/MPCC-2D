@@ -1,4 +1,4 @@
-# MPCC-2D
+# MPCC-2D (IN DEVELOPMENT)
 
 A C++ library in development for **Model Predictive Contouring Control (MPCC)** of ground-based wheeled vehicles (2D).
 

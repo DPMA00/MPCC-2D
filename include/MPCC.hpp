@@ -4,6 +4,7 @@
 #include "ParametricSpline.hpp"
 #include "qpOASES.hpp"
 #include <optional>
+#include <chrono>
 
 enum DynModel{
     DIFFDRIVE = 0,
@@ -14,6 +15,7 @@ enum Integrator{
     EXPL_EULER =0,
     EXPL_RK4 = 1
 };
+
 
 class MPCC
 {
@@ -50,6 +52,8 @@ private:
     Eigen::MatrixXd X;
     Eigen::MatrixXd U;
     Eigen::MatrixXd J_R;
+    Eigen::MatrixXd j_r;
+    Eigen::MatrixXd J_dynamics;
 
     Eigen::Vector4d diffdrive_dynamics(const Eigen::Vector4d& x,const Eigen::Vector3d&);
     Eigen::MatrixXd get_diffdrive_jacobian(const Eigen::VectorXd& x, const Eigen::VectorXd& u);
@@ -59,7 +63,7 @@ private:
 
     void warmstart(const Eigen::VectorXd& x0);
 
-    void getFullJacobian();
+    void linearize_model(const Eigen::VectorXd&X, const Eigen::VectorXd& U);
 
 public:
     MPCC(int N, double Ts, ParametricSpline& spline);
