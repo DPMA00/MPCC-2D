@@ -3,7 +3,6 @@
 MPCC::MPCC(int N, double Ts, ParametricSpline& spline)
 : N(N), Ts(Ts), current_path(&spline)
 {
-
 }
 
 MPCC::~MPCC(){}
@@ -12,6 +11,7 @@ MPCC::~MPCC(){}
 
 void MPCC::config_projection(ProjMethod proj, int max_iter, double tolerance)
 {
+    current_path->set_proj_method(proj);
     NewtonConfig config = {tolerance, max_iter};
     current_path->configure_newton(config);
 }
@@ -20,6 +20,7 @@ void MPCC::config_projection(ProjMethod proj, int max_iter, double tolerance)
 
 void MPCC::config_projection(ProjMethod proj, double eps, double distance_upperbound)
 {
+    current_path->set_proj_method(proj);
     KDTreeConfig config = {distance_upperbound, eps};
     current_path->configure_kdtree(config);
 }
@@ -53,9 +54,12 @@ void MPCC::configure_dynamics(DynModel model, Integrator integrator)
     NCON = NX*(N+1); // equality constraints from multiple shooting
     NVAR = NX*(N+1) + NU*N; // multiple shooting without slack variables
 
-    qpprob = qpOASES::QProblem(NVAR,NCON);
+    qpprob = qpOASES::SQProblem(NVAR,NCON);
     qpOASES::Options options;
-    options.printLevel = qpOASES::PL_LOW;
+    options.printLevel = qpOASES::PL_NONE;
+    options.setToMPC();
+    options.enableEqualities = qpOASES::BT_TRUE;
+    //options.setToReliable();
     qpprob.setOptions(options);
 
 
@@ -149,16 +153,36 @@ void MPCC::update_path(const waypoints& points)
 void MPCC::warmstart(const Eigen::VectorXd& x0)
 {
     // Shift the state and controls initial guess by removing the first entry nd duplicating the last
+    
     Eigen::MatrixXd Xnew(NX,N+1);
     Xnew.leftCols(N) = X.rightCols(N);
     Xnew.col(N) = Xnew.col(N-1);
     X = Xnew;
     X.col(0) = x0;
 
+    // Projection of X,Y onto track to retrieve closest path parameter s
+    XY = x0.head<2>();
+    s_prev = x0(NX-1);
+    X(NX-1,0) = current_path->local_search(s_prev, XY); 
+    
+
+
+
     Eigen::MatrixXd Unew(NU,N);
     Unew.leftCols(N-1) = U.rightCols(N-1);
     Unew.col(N-1) = Unew.col(N-2);
     U = Unew;
+    /*
+
+    X.col(0) = x0;
+    XY = x0.head<2>();
+    s_prev = x0(NX-1);
+    X(NX-1,0) = current_path->local_search(s_prev, XY); 
+    
+    for (int k = 0; k<N;++k)
+    {
+        X.col(k+1) = Euler_step(X.col(k), U.col(k));
+    }*/
 }
 
 
@@ -218,12 +242,13 @@ int MPCC::get_idx_u(int k)
 
 void MPCC::SQP_step(const Eigen::VectorXd& dz)
 {
+    double alpha= 1; //0.5, 0.8,1 works well
     for (int k=0; k<N; ++k)
     {
-        X.col(k) += dz.segment(get_idx_x(k), NX);
-        U.col(k) += dz.segment(get_idx_u(k), NU);
+        X.col(k) += alpha*dz.segment(get_idx_x(k), NX);
+        U.col(k) += alpha*dz.segment(get_idx_u(k), NU);
     }
-    X.col(N) += dz.segment(get_idx_x(N), NX);
+    X.col(N) += alpha*dz.segment(get_idx_x(N), NX);
 }
 
 void MPCC::setupQP()
@@ -263,7 +288,7 @@ void MPCC::setupQP()
             double e_l = -(x-xr)*cosphi - (y-yr)*sinphi;
             double e_u1 = u1; // just minimize the controls for now (u-u_prev added later on)
             double e_u2 = u2; // ^==
-            double e_uv = uv-0.6; // maximize progress (adjust target value according to performance behavior) 
+            double e_uv = uv-1; // maximize progress (adjust target value according to performance behavior) 
             
             r_z << e_c, e_l, e_u1, e_u2, e_uv;
 
@@ -309,21 +334,19 @@ void MPCC::setupQP()
             //
             
         }
+    H.diagonal().array() +=1e-6;
 }
 
 void MPCC::solve(const Eigen::VectorXd& x0)
 {
+    auto start = std::chrono::high_resolution_clock::now();
     if (!current_path)
         throw std::runtime_error("solve: no path set");
     
     warmstart(x0);
-
-    // Projection of X,Y onto track to retrieve closest path parameter s
-    XY = x0.head<2>();
-    s_prev = x0(NX-1);
-    X(NX-1,0) = current_path->local_search(s_prev, XY); 
-
-    
+    bool init = false;
+    bool ret = false;
+    solved= false;
     //SQP Loop
     for (int i=0; i<sol_settings.max_iter; ++i)
     {
@@ -333,6 +356,7 @@ void MPCC::solve(const Eigen::VectorXd& x0)
         A.setZero();
         lbA.setZero();
         ubA.setZero();
+
         // State at k=0 equality constraint
         A.block(0,0,NX,NX) = NX_Identity;
         lbA.segment(0,NX).setZero();
@@ -340,37 +364,50 @@ void MPCC::solve(const Eigen::VectorXd& x0)
         int NWSR = sol_settings.QP_max_iter;
         
         setupQP();
-        std::cout << "H diag min/max: " << H.diagonal().minCoeff() << " " << H.diagonal().maxCoeff() << "\n";
-        std::cout << "A norm: " << A.norm() << "\n";
-        std::cout << "lbA norm: " << lbA.norm() << "\n";
-        std::cout << "ubA norm: " << ubA.norm() << "\n";
-        std::cout << "Any NaN H? " << (!H.allFinite()) << "\n";
-        std::cout << "Any NaN A? " << (!A.allFinite()) << "\n";
-        std::cout << "Any NaN lbA? " << (!lbA.allFinite()) << "\n";
-        //QP Loop
-        auto start = std::chrono::high_resolution_clock::now();
-        auto ret = qpprob.init(H.data(),
-                    g.data(),
-                    A.data(),
-                    lbx.data(),
-                    ubx.data(),
-                    lbA.data(),
-                    ubA.data(), NWSR);
+        if (!init)
+        {
+            ret = qpprob.init(H.data(),
+                        g.data(),
+                        A.data(),
+                        lbx.data(),
+                        ubx.data(),
+                        lbA.data(),
+                        ubA.data(), NWSR);
+            init = (ret == qpOASES::SUCCESSFUL_RETURN);
+        }
 
-        auto stop = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop-start);
-        std::cout << duration.count() << std::endl;
-        
+        else
+        {
+            ret = qpprob.hotstart(H.data(),
+                        g.data(),
+                        A.data(),
+                        lbx.data(),
+                        ubx.data(),
+                        lbA.data(),
+                        ubA.data(), NWSR);
+            init = (ret == qpOASES::SUCCESSFUL_RETURN);
+        }
         if (ret !=qpOASES::SUCCESSFUL_RETURN)
         {
+            std::cout << "No solution found" << std::endl;
             break;
         }
+
         qpprob.getPrimalSolution(dZ.data());
-        
+        std::cout << dZ.norm() << std::endl;
+        if (dZ.norm()<sol_settings.tolerance)
+        {
+            std::cout << "Solution found!" << std::endl;
+            solved = true;
+            break;
+        }
         SQP_step(dZ);
+
     }
     
-
+    auto stop = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop-start);
+    std::cout << duration.count() << std::endl;
 }
 
 

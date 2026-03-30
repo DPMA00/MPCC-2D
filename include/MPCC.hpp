@@ -41,7 +41,7 @@ private:
     Integrator integrator;
     PathDat dat_s; 
     SolverSettings sol_settings;
-    qpOASES::QProblem qpprob;
+    qpOASES::SQProblem qpprob;
     
 
     int N;
@@ -51,7 +51,7 @@ private:
     int NCON;
     int NVAR;
     int r_size;
-
+    bool solved;
     
     double s_prev;
     double s;

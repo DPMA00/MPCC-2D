@@ -50,7 +50,8 @@ private:
 public:
     ParametricSpline(SplineType splinetype);
     ~ParametricSpline();
-
+    
+    void set_proj_method(ProjMethod& method);
     void update_path(const waypoints& points);
     std::vector<double> get_arc_lengths() const;
     PathDat evalf_diff(double s);

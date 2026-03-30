@@ -30,7 +30,10 @@ void ParametricSpline::configure_kdtree(const KDTreeConfig& config)
 }
 
 
-
+void ParametricSpline::set_proj_method(ProjMethod& method)
+{
+    this->method = method;
+}
 
 std::vector<double> ParametricSpline::compute_arc_lengths(const waypoints& points)
 {
@@ -194,7 +197,7 @@ double ParametricSpline::newton_search(bool global,const double initial_guess, c
         double s_new = s-step;
 
         s = s_new;
-
+        s = std::clamp(s_new, s_.front(), s_.back()); // dont accidentally jump off the segment
         if (std::abs(step) < newton_config_.tolerance) break;
     }
 
