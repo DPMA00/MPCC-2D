@@ -26,8 +26,6 @@ struct PathDat{
     double phi;
     double dxs;
     double dys;
-    double ddxs;
-    double ddys;
     double dphis;
 };
 
@@ -58,6 +56,7 @@ public:
     PathDat evalf_diff(double s);
     double local_search(const double initial_guess, const Eigen::Vector2d& point);
     void configure_newton(const NewtonConfig& config);
+    void configure_kdtree(const KDTreeConfig& config);
 };
 
 #endif

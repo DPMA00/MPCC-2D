@@ -21,6 +21,17 @@ void ParametricSpline::configure_newton(const NewtonConfig& config)
 }
 
 
+void ParametricSpline::configure_kdtree(const KDTreeConfig& config)
+{
+    /*
+        Defines configuration settings for the newton type projection method.
+    */
+    kdtree_config_ = config;
+}
+
+
+
+
 std::vector<double> ParametricSpline::compute_arc_lengths(const waypoints& points)
 {
     /*
@@ -102,15 +113,16 @@ PathDat ParametricSpline::evalf_diff(double s)
     */
     int k = spline_sx_.get_segment(s);
 
+    double ddxs = spline_sx_.eval_second_derivative(k,s);
+    double ddys = spline_sy_.eval_second_derivative(k,s);
+
     PathDat eval;
     eval.x = spline_sx_.evalf(k,s);
     eval.y = spline_sy_.evalf(k,s);
     eval.dxs = spline_sx_.eval_derivative(k,s);
     eval.dys = spline_sy_.eval_derivative(k,s);
-    eval.ddxs = spline_sx_.eval_second_derivative(k,s);
-    eval.ddys = spline_sy_.eval_second_derivative(k,s);
     eval.phi = std::atan2(eval.dys,eval.dxs);
-    eval.dphis = (eval.dxs*eval.ddys - eval.dys*eval.ddxs) / (eval.dxs * eval.dxs + eval.dys*eval.dys +1e-9);
+    eval.dphis = (eval.dxs*ddys - eval.dys*ddxs) / (eval.dxs * eval.dxs + eval.dys*eval.dys +1e-9);
     return eval;
 }
 
