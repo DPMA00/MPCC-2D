@@ -9,7 +9,7 @@ The library will support:
 
 Given a path or track description, the library allows construction of a **parametric path representation** that is passed to the MPCC. The controller then solves the resulting nonlinear optimal control problem using **Sequential Quadratic Programming (SQP)**.
 
-## Example Workflow (future)
+## Example Workflow (likely to have changes)
 
 ``test/`` will contain examples.
 
@@ -20,9 +20,12 @@ Given a path or track description, the library allows construction of a **parame
 3. Construct an MPCC object with prediction horizon length **N**, sampling time **$T_s$** and the spline created above.
 4. Select a vehicle model and integration method using **configure_dynamics()**.
 5. Select a track projection method and configure its settings using the **configure_projection()**.
-6. Pass the path into **update_path()** to construct the parametric path representation.
-7. Start the MPC loop using your state feedback or state estimation pipeline.
-8. At each control step, call **solve()** with the current state estimate.
+6. Configure the solver settings for the SQP loop and inner QP solver with **config_solver_settings()**.
+7. Pass the weigths $Q$ and $R$ to the MPCC object through **set_weights()**. 
+8. Pass the path into **update_path()** to construct the parametric path representation.
+9. Start the MPC loop using your state feedback or state estimation pipeline.
+10. At each control step, call **solve()** with the current state estimate.
+11. Retrieve the controls by calling **get_solution()**.
 
 ### Dynamic Track (with a global planner)
 
@@ -30,10 +33,13 @@ Given a path or track description, the library allows construction of a **parame
 2. Construct an MPCC object with prediction horizon length **N**, sampling time **$T_s$** and the spline created above.
 3. Select a vehicle model and integration method using **configure_dynamics()**.
 4. Select a track projection method and configure its settings using the **configure_projection()**.
-5. Start the global planner outer loop.
-6. At each planning update, load the planned path as a **waypoints** struct and pass the path into **update_path()** to construct the parametric path representation.
-1. Start the MPC loop using your state feedback or state estimation pipeline.
-2. At each control step, call **solve()** with the current state estimate.
+5. Configure the solver settings for the SQP loop and inner QP solver with **config_solver_settings()**.
+6. Pass the weigths $Q$ and $R$ to the MPCC object through **set_weights()**.
+7. Start the global planner outer loop.
+8. At each planning update, load the planned path as a **waypoints** struct and pass the path into **update_path()** to construct the parametric path representation.
+9. Start the MPC loop using your state feedback or state estimation pipeline.
+10. At each control step, call **solve()** with the current state estimate.
+11. Retrieve the controls by calling **get_solution()**.
 
 
 

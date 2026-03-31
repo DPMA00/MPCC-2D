@@ -1,8 +1,5 @@
 #include "MPCC.hpp"
 #include <iostream>
-
-
-#include <iostream>
 #include <fstream>
 #include <stdexcept>
 #include <string>
