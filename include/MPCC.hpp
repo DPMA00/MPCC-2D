@@ -29,8 +29,13 @@ struct SolverSettings{
     int max_iter;
     double tolerance;
     int QP_max_iter;
-    double QP_tolerance;
     PrintLevel printlevel;
+};
+
+
+struct FullSolution{
+    Eigen::VectorXd X;
+    Eigen::VectorXd U;
 };
 
 class MPCC
@@ -65,13 +70,20 @@ private:
     Eigen::MatrixXd NX_Identity;
     Eigen::MatrixXd NU_Identity;
 
+
+    // QP Params
     RowMajorMat H;
     Eigen::VectorXd g;
     RowMajorMat A;
     Eigen::VectorXd lbA;
     Eigen::VectorXd ubA;
+    Eigen::VectorXd lbz;
+    Eigen::VectorXd ubz;
+
     Eigen::VectorXd lbx;
     Eigen::VectorXd ubx;
+    Eigen::VectorXd lbu;
+    Eigen::VectorXd ubu;
 
     Eigen::VectorXd W;
     Eigen::VectorXd r_z;
@@ -81,7 +93,7 @@ private:
     Eigen::VectorXd dyn_dev;
 
     Eigen::Vector4d diffdrive_dynamics(const Eigen::Vector4d& x,const Eigen::Vector3d&);
-    Eigen::MatrixXd get_diffdrive_jacobian(const Eigen::VectorXd& x, const Eigen::VectorXd& u);
+
 
     Eigen::VectorXd RK4_step(const Eigen::VectorXd& X,const Eigen::VectorXd& U);
     Eigen::VectorXd Euler_step(const Eigen::VectorXd& X, const Eigen::VectorXd& U);
@@ -99,13 +111,17 @@ public:
     void configure_dynamics(DynModel model = DIFFDRIVE, Integrator integrator = EXPL_RK4);
     void config_projection(ProjMethod proj, int max_iter, double tolerance);
     void config_projection(ProjMethod proj, double eps, double distance_upperbound);
-    void config_solver_settings(int max_iter, double tol, int QP_max_iter, double QP_tol, PrintLevel printsetting);
+    void config_solver_settings(int max_iter, double tol, int QP_max_iter, PrintLevel printsetting);
+    
     void set_weigths(const Eigen::VectorXd& Qe, const Eigen::VectorXd& Ru);
+    void set_constraints(const Eigen::VectorXd& lbx, const Eigen::VectorXd&ubx,
+                        const Eigen::VectorXd& lbu, const Eigen::VectorXd&ubu);
 
     void solve(const Eigen::VectorXd& x0);
     void update_path(const waypoints& points);
 
-    Eigen::VectorXd get_solution();
+    Eigen::VectorXd get_controls();
+    FullSolution get_full_solution();
     Eigen::VectorXd simstep(const Eigen::VectorXd& x, const Eigen::VectorXd& u);
 
 

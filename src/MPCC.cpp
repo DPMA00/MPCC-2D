@@ -26,13 +26,33 @@ void MPCC::config_projection(ProjMethod proj, double eps, double distance_upperb
 }
 
 
-void MPCC::config_solver_settings(int max_iter, double tol, int QP_max_iter, double QP_tol, PrintLevel printsetting)
+void MPCC::config_solver_settings(int max_iter, double tol, int QP_max_iter, PrintLevel printsetting)
 {
     sol_settings.max_iter = max_iter;
     sol_settings.tolerance = tol;
     sol_settings.QP_max_iter = QP_max_iter;
-    sol_settings.QP_tolerance = QP_tol;
     sol_settings.printlevel = printsetting;
+
+    
+
+    qpOASES::Options options;
+    options.setToMPC();
+    options.enableEqualities = qpOASES::BT_TRUE;
+
+    if (printsetting == PRINT_LEVEL_NONE)
+    {
+        options.printLevel = qpOASES::PL_NONE;
+    }
+    else if (printsetting==PRINT_LEVEL_SIMPLE)
+    {
+        options.printLevel = qpOASES::PL_LOW;
+    }
+    else if (printsetting==PRINT_LEVEL_DETAILED)
+    {
+        options.printLevel = qpOASES::PL_HIGH;
+    }    
+
+    qpprob.setOptions(options);
 }
 
 void MPCC::configure_dynamics(DynModel model, Integrator integrator)
@@ -54,14 +74,8 @@ void MPCC::configure_dynamics(DynModel model, Integrator integrator)
     NCON = NX*(N+1); // equality constraints from multiple shooting
     NVAR = NX*(N+1) + NU*N; // multiple shooting without slack variables
 
-    qpprob = qpOASES::SQProblem(NVAR,NCON);
-    qpOASES::Options options;
-    options.printLevel = qpOASES::PL_NONE;
-    options.setToMPC();
-    options.enableEqualities = qpOASES::BT_TRUE;
-    //options.setToReliable();
-    qpprob.setOptions(options);
 
+    qpprob = qpOASES::SQProblem(NVAR,NCON);
 
     H =  RowMajorMat::Zero(NVAR,NVAR);
     g = Eigen::VectorXd::Zero(NVAR);
@@ -69,8 +83,8 @@ void MPCC::configure_dynamics(DynModel model, Integrator integrator)
     lbA = Eigen::VectorXd(NCON);
     ubA = Eigen::VectorXd(NCON);
     const double INF = 1e10;
-    lbx = Eigen::VectorXd::Constant(NVAR, -INF);
-    ubx = Eigen::VectorXd::Constant(NVAR, INF);
+    lbz = Eigen::VectorXd::Constant(NVAR, -INF);
+    ubz = Eigen::VectorXd::Constant(NVAR, INF);
 
     r_size = 2+NU; // contour error, lag error + controls
 
@@ -86,6 +100,11 @@ void MPCC::configure_dynamics(DynModel model, Integrator integrator)
     dZ = Eigen::VectorXd::Zero(NVAR);
     NX_Identity = Eigen::MatrixXd::Identity(NX,NX);
     NU_Identity = Eigen::MatrixXd::Identity(NU,NU);
+
+    lbx = Eigen::VectorXd::Zero(NX);
+    ubx = Eigen::VectorXd::Zero(NX);
+    lbu = Eigen::VectorXd::Zero(NU);
+    ubu = Eigen::VectorXd::Zero(NU);
 }
 
 
@@ -103,6 +122,19 @@ void MPCC::set_weigths(const Eigen::VectorXd& Qe, const Eigen::VectorXd& Ru)
     
 }
 
+
+void MPCC::set_constraints(const Eigen::VectorXd& lbx, const Eigen::VectorXd&ubx,
+                        const Eigen::VectorXd& lbu, const Eigen::VectorXd&ubu)
+{
+    //if (lbx.size()==NX && ubx.size()==NX && lbu.size() == NU && ubu.size() == NU)
+    //{
+        this->lbx = lbx;
+        this->ubx = ubx;
+        this->lbu = lbu;
+        this->ubu = ubu;
+    //}
+    //throw std::runtime_error("set_constraints: constraint dimenion mismatch");
+}
 
 Eigen::Vector4d MPCC::diffdrive_dynamics(const Eigen::Vector4d& X,const Eigen::Vector3d& U)
 {
@@ -223,10 +255,19 @@ void MPCC::get_function_jacobian(const Eigen::VectorXd& X, const Eigen::VectorXd
 
 
 
-Eigen::VectorXd MPCC::get_solution()
+Eigen::VectorXd MPCC::get_controls()
 {
     return U.col(0);
 }
+
+FullSolution MPCC::get_full_solution()
+{
+    FullSolution sol;
+    sol.X = X;
+    sol.U = U;
+    return sol;
+}
+
 
 int MPCC::get_idx_x(int k)
 {
@@ -288,7 +329,7 @@ void MPCC::setupQP()
             double e_l = -(x-xr)*cosphi - (y-yr)*sinphi;
             double e_u1 = u1; // just minimize the controls for now (u-u_prev added later on)
             double e_u2 = u2; // ^==
-            double e_uv = uv-1; // maximize progress (adjust target value according to performance behavior) 
+            double e_uv = uv-80; // maximize progress (adjust target value according to performance behavior) 
             
             r_z << e_c, e_l, e_u1, e_u2, e_uv;
 
@@ -327,11 +368,13 @@ void MPCC::setupQP()
             A.block(NX*(k+1), (NX+NU)*k, NX, NX+NU) = J_func;
             A.block(NX*(k+1), (NX+NU)*(k+1), NX,NX) = -NX_Identity;
             lbA.segment((k+1)*NX, NX) = dyn_dev;
-            ubA.segment((k+1)*NX, NX) = lbA.segment((k+1)*NX,NX);
-
+            ubA.segment((k+1)*NX, NX) = dyn_dev;
+            lbz.segment(get_idx_x(k),NX) = lbx - X.col(k);
+            lbz.segment(get_idx_u(k),NU) = lbu - U.col(k);
+            ubz.segment(get_idx_x(k),NX) = ubx - X.col(k);
+            ubz.segment(get_idx_u(k),NU) = ubu - U.col(k);
             j_r.setZero(); // reset the cost jacobians
 
-            //
             
         }
     H.diagonal().array() +=1e-6;
@@ -345,7 +388,7 @@ void MPCC::solve(const Eigen::VectorXd& x0)
     
     warmstart(x0);
     bool init = false;
-    bool ret = false;
+    qpOASES::returnValue ret;
     solved= false;
     //SQP Loop
     for (int i=0; i<sol_settings.max_iter; ++i)
@@ -364,13 +407,14 @@ void MPCC::solve(const Eigen::VectorXd& x0)
         int NWSR = sol_settings.QP_max_iter;
         
         setupQP();
+
         if (!init)
         {
             ret = qpprob.init(H.data(),
                         g.data(),
                         A.data(),
-                        lbx.data(),
-                        ubx.data(),
+                        lbz.data(),
+                        ubz.data(),
                         lbA.data(),
                         ubA.data(), NWSR);
             init = (ret == qpOASES::SUCCESSFUL_RETURN);
@@ -381,20 +425,20 @@ void MPCC::solve(const Eigen::VectorXd& x0)
             ret = qpprob.hotstart(H.data(),
                         g.data(),
                         A.data(),
-                        lbx.data(),
-                        ubx.data(),
+                        lbz.data(),
+                        ubz.data(),
                         lbA.data(),
                         ubA.data(), NWSR);
             init = (ret == qpOASES::SUCCESSFUL_RETURN);
         }
         if (ret !=qpOASES::SUCCESSFUL_RETURN)
         {
-            std::cout << "No solution found" << std::endl;
+            std::cout << "QP solver failed to find solution." << std::endl;
             break;
         }
 
         qpprob.getPrimalSolution(dZ.data());
-        std::cout << dZ.norm() << std::endl;
+        //std::cout << dZ.norm() << std::endl;
         if (dZ.norm()<sol_settings.tolerance)
         {
             std::cout << "Solution found!" << std::endl;
