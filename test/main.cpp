@@ -85,7 +85,7 @@ int main()
     mpcc.config_solver_settings(1, 1e-3, 50, PRINT_LEVEL_NONE);
 
 
-    waypoints points = load_track_csv("path/to/track.csv");
+    waypoints points = load_track_csv("track/to/path.csv");
     
     mpcc.update_path(points);
 

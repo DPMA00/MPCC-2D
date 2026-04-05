@@ -55,13 +55,11 @@ void MPCC::config_solver_settings(int max_iter, double tol, int QP_max_iter, Pri
     qpprob.setOptions(options);
 }
 
-void MPCC::configure_dynamics(DynModel model, Integrator integrator)
+void MPCC::configure_dynamics(DynModel model, Integ integrator)
 {
-    this->model = model;
-    this->integrator = integrator;
-
     if (model==DIFFDRIVE)
     {
+        this->model = std::make_unique<DiffDriveModel>();
         NX = 4;
         NU = 3;
     }
@@ -69,6 +67,15 @@ void MPCC::configure_dynamics(DynModel model, Integrator integrator)
     {
         NX = 6;
         NU = 3;
+    }
+
+    if (integrator==EXPL_EULER)
+    {
+        this->integrator = std::make_unique<ForwardEuler>();
+    }
+    else if (integrator==EXPL_RK4)
+    {
+        //this->integrator = std::make_unique<RK4>();
     }
 
     NCON = NX*(N+1); // equality constraints from multiple shooting
@@ -91,6 +98,7 @@ void MPCC::configure_dynamics(DynModel model, Integrator integrator)
     W = Eigen::VectorXd(r_size);
 
     J_func = Eigen::MatrixXd::Zero(NX,NX+NU);
+    J_dyn= Eigen::MatrixXd::Zero(NX,NX+NU);
     dyn_dev = Eigen::VectorXd::Zero(NX);
 
     r_z = Eigen::VectorXd::Zero(r_size);
@@ -126,54 +134,28 @@ void MPCC::set_weigths(const Eigen::VectorXd& Qe, const Eigen::VectorXd& Ru)
 void MPCC::set_constraints(const Eigen::VectorXd& lbx, const Eigen::VectorXd&ubx,
                         const Eigen::VectorXd& lbu, const Eigen::VectorXd&ubu)
 {
-    //if (lbx.size()==NX && ubx.size()==NX && lbu.size() == NU && ubu.size() == NU)
-    //{
-        this->lbx = lbx;
-        this->ubx = ubx;
-        this->lbu = lbu;
-        this->ubu = ubu;
-    //}
-    //throw std::runtime_error("set_constraints: constraint dimenion mismatch");
+    this->lbx = lbx;
+    this->ubx = ubx;
+    this->lbu = lbu;
+    this->ubu = ubu;
+
 }
 
-Eigen::Vector4d MPCC::diffdrive_dynamics(const Eigen::Vector4d& X,const Eigen::Vector3d& U)
-{
-    double xdot = U(0) * std::cos(X(2));
-    double ydot = U(0) * std::sin(X(2));
-    double thetadot = U(1);
-    double sdot = U[2];
-    Eigen::Vector4d out;
-    out << xdot, ydot, thetadot,sdot;
-    return out;
-}
-
-Eigen::VectorXd MPCC::Euler_step(const Eigen::VectorXd& x,const Eigen::VectorXd& u)
-{
-    if (model==DIFFDRIVE)
-    {
-        Eigen::Vector4d x_ = x.head<4>();
-        Eigen::Vector3d u_ = u.head<3>();
-
-        return x_ + Ts*diffdrive_dynamics(x_, u_);
-    }
-    throw std::runtime_error("Euler_step: unsupported dynamics model");
-}
 
 
 Eigen::VectorXd MPCC::RK4_step(const Eigen::VectorXd& x,const Eigen::VectorXd& u)
 {
-    if (model==DIFFDRIVE)
-    {
-        Eigen::Vector4d x_ = x.head<4>();
-        Eigen::Vector3d u_ = u.head<3>();
 
-        Eigen::Vector4d k1 = diffdrive_dynamics(x_, u_);
-        Eigen::Vector4d k2 = diffdrive_dynamics(x_ + 0.5*Ts * k1, u_);
-        Eigen::Vector4d k3 = diffdrive_dynamics(x_ + 0.5*Ts * k2, u_);
-        Eigen::Vector4d k4 = diffdrive_dynamics(x_ + Ts * k3, u_);
-        return x_ + Ts/6 *(k1 + 2*k2 +2*k3 + k4);
-    }
-    throw std::runtime_error("RK4_step: unsupported dynamics model");
+    Eigen::Vector4d x_ = x.head<4>();
+    Eigen::Vector3d u_ = u.head<3>();
+
+    Eigen::Vector4d k1 = model->dynamics(x_, u_);
+    Eigen::Vector4d k2 = model->dynamics(x_ + 0.5*Ts * k1, u_);
+    Eigen::Vector4d k3 = model->dynamics(x_ + 0.5*Ts * k2, u_);
+    Eigen::Vector4d k4 = model->dynamics(x_ + Ts * k3, u_);
+    return x_ + Ts/6 *(k1 + 2*k2 +2*k3 + k4);
+    
+
 }
 
 
@@ -217,41 +199,6 @@ void MPCC::warmstart(const Eigen::VectorXd& x0)
     }*/
 }
 
-
-void MPCC::get_function_jacobian(const Eigen::VectorXd& X, const Eigen::VectorXd& U)
-{
-    if(integrator == EXPL_EULER)
-    {
-        if(model==DIFFDRIVE)
-        {
-            double u1 = U(0);
-            double x3 = X(2);
-            double sintheta = std::sin(x3);
-            double costheta = std::cos(x3);
-
-            J_func.setZero();
-
-            // States: A_d = I + A_c * Ts
-            J_func(0,0) = 1.0;
-            J_func(1,1) = 1.0;
-            J_func(2,2) = 1.0;
-            J_func(3,3) = 1.0;
-
-            J_func(0,2) = -u1*sintheta * Ts;
-            J_func(1,2) = u1*costheta * Ts;
-
-            // Controls: B_d = B_c*Ts;
-            
-            J_func(0,4) = costheta * Ts;
-            J_func(1,4) = sintheta * Ts;
-            J_func(2,5) = Ts;
-            J_func(3,6) = Ts;
-
-            return;
-        }
-    }
-    throw std::runtime_error("get_function_jacobian: unsupported model/integrator");
-}
 
 
 
@@ -303,7 +250,6 @@ void MPCC::setupQP()
             auto state = X.col(k);
             auto control = U.col(k);
             z_k << state, control;
-
             double x = state(0);
             double y = state(1);
             double theta = state(2);
@@ -358,13 +304,14 @@ void MPCC::setupQP()
 
             H.block(k*(NX+NU), k*(NX+NU), NX+NU,NX+NU) += j_r.transpose() * Wd * j_r;
             
+            auto next_state = integrator->step(*model, state, control, Ts);
 
-            auto next_state = Euler_step(state, control);
 
 
             // multiple shooting constraints
             dyn_dev = X.col(k+1) - next_state;
-            get_function_jacobian(state,control);
+            integrator->linearize_step(*model, state, control, Ts, J_dyn, J_func);
+
             A.block(NX*(k+1), (NX+NU)*k, NX, NX+NU) = J_func;
             A.block(NX*(k+1), (NX+NU)*(k+1), NX,NX) = -NX_Identity;
             lbA.segment((k+1)*NX, NX) = dyn_dev;

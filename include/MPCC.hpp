@@ -3,7 +3,9 @@
 
 #include "ParametricSpline.hpp"
 #include "qpOASES.hpp"
-#include <optional>
+#include "ForwardEuler.hpp"
+#include "DiffDriveModel.hpp"
+#include <memory>
 #include <chrono>
 
 
@@ -14,7 +16,7 @@ enum DynModel{
     BICYCLE_MODEL = 1
 };
 
-enum Integrator{
+enum Integ{
     EXPL_EULER =0,
     EXPL_RK4 = 1
 };
@@ -41,9 +43,11 @@ struct FullSolution{
 class MPCC
 {
 private:
+    std::unique_ptr<Model> model;
+    std::unique_ptr<Integrator> integrator;
     ParametricSpline* current_path;
-    DynModel model;
-    Integrator integrator;
+
+
     PathDat dat_s; 
     SolverSettings sol_settings;
     qpOASES::SQProblem qpprob;
@@ -90,25 +94,24 @@ private:
     Eigen::MatrixXd j_r;
 
     Eigen::MatrixXd J_func;
+    Eigen::MatrixXd J_dyn;
     Eigen::VectorXd dyn_dev;
-
-    Eigen::Vector4d diffdrive_dynamics(const Eigen::Vector4d& x,const Eigen::Vector3d&);
 
 
     Eigen::VectorXd RK4_step(const Eigen::VectorXd& X,const Eigen::VectorXd& U);
-    Eigen::VectorXd Euler_step(const Eigen::VectorXd& X, const Eigen::VectorXd& U);
+
     int get_idx_x(int k);
     int get_idx_u(int k);
 
     void SQP_step(const Eigen::VectorXd& dz);
     void setupQP();
     void warmstart(const Eigen::VectorXd& x0);
-    void get_function_jacobian(const Eigen::VectorXd&X, const Eigen::VectorXd& U);
+
 
 public:
     MPCC(int N, double Ts, ParametricSpline& spline);
     ~MPCC();
-    void configure_dynamics(DynModel model = DIFFDRIVE, Integrator integrator = EXPL_RK4);
+    void configure_dynamics(DynModel model = DIFFDRIVE, Integ integrator = EXPL_RK4);
     void config_projection(ProjMethod proj, int max_iter, double tolerance);
     void config_projection(ProjMethod proj, double eps, double distance_upperbound);
     void config_solver_settings(int max_iter, double tol, int QP_max_iter, PrintLevel printsetting);

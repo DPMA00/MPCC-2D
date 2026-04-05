@@ -9,6 +9,10 @@ find_package(qpOASES)
 add_library(mpcc_core_lib
     src/Spline1D.cpp
     src/ParametricSpline.cpp
+    src/Integrator.cpp
+    src/ForwardEuler.cpp
+    src/Model.cpp
+    src/DiffDriveModel.cpp
     src/MPCC.cpp)
 
 target_include_directories(mpcc_core_lib PUBLIC
