@@ -80,35 +80,36 @@ int main()
     ParametricSpline spline(T2_NATURAL_BOUNDARY_SPLINE);    
     MPCC mpcc(20, 0.1, spline);
 
-    mpcc.configure_dynamics(DIFFDRIVE, EXPL_EULER);
+    mpcc.configure_dynamics(SECOND_ORDER_MODEL, EXPL_EULER);
     mpcc.config_projection(NEWTON_STEP, 20, 1.0e-6);
-    mpcc.config_solver_settings(1, 1e-3, 50, PRINT_LEVEL_NONE);
+    mpcc.config_solver_settings(1, 1e-3, 150, PRINT_LEVEL_SIMPLE);
 
 
-    waypoints points = load_track_csv("track/to/path.csv");
+    waypoints points = load_track_csv("/path/to/track.csv");
     
     mpcc.update_path(points);
 
-    Eigen::VectorXd x0(4);
-    x0 << points.x[0], points.y[0], M_PI/2, 0;
+    Eigen::VectorXd x0(7);
+    x0 << points.x[0], points.y[0], M_PI/2, 0, 0, 0, 0;
     Eigen::VectorXd Q(2);
-    Q<< 3300, 3000;
+    Q<< 250, 50;
 
-    Eigen::VectorXd R(3);
-    R<<10,10,50;
+    Eigen::VectorXd R(4);
+    R<<1,1,1,10;
 
     mpcc.set_weigths(Q, R);
 
 
-    Eigen::VectorXd lbx(4);
-    Eigen::VectorXd ubx(4);
-    Eigen::VectorXd lbu(3);
-    Eigen::VectorXd ubu(3);
+    Eigen::VectorXd lbx(7);
+    Eigen::VectorXd ubx(7);
+    Eigen::VectorXd lbu(4);
+    Eigen::VectorXd ubu(4);
 
-    lbx << -INFINITY, -INFINITY, -INFINITY, -INFINITY;
-    ubx << INFINITY, INFINITY, INFINITY, INFINITY;
-    lbu << -20, -3, -70;
-    ubu << 70,  3,  80;
+    lbx << -1e6, -1e6, -M_PI,   0.0,  -4.0,  -0.8,   0.0;
+    ubx <<  1e6,  1e6,  M_PI,  50.0,   4.0,   0.8,   1e6;
+
+    lbu << -6.0, -5.0, -1.0,   0.0;
+    ubu <<  3.0,  5.0,  1.0,  50.0;
 
     mpcc.set_constraints(lbx, ubx, lbu, ubu);
     int steps = 1000;//;
@@ -126,7 +127,7 @@ int main()
         x0 = mpcc.simstep(x0, u);
         traj_x.push_back(x0(0));
         traj_y.push_back(x0(1));
-        vel.push_back(u(0));
+        vel.push_back(x0(3));
     }
     double duplicate = vel.back();
     vel.push_back(duplicate);

@@ -1,0 +1,60 @@
+#include "Constrained2ndOrderModel.hpp"
+
+
+Constrained2ndOrderModel::Constrained2ndOrderModel()
+: I_NX_(Eigen::MatrixXd::Identity(7,7)), I_NU_(Eigen::Matrix4d::Identity(4,4)), A_mat(Eigen::MatrixXd::Zero(6,3)), B_vec(Eigen::VectorXd::Zero(6))
+{}
+
+Eigen::VectorXd Constrained2ndOrderModel::dynamics(const Eigen::VectorXd& x, const Eigen::VectorXd&u) const
+{
+    double cospsi = std::cos(x(2));
+    double sinpsi = std::sin(x(2));
+
+    double vx = x(3);
+    double vy = x(4);
+    double vpsi = x(5);
+    
+    double xdot = vx*cospsi - vy*sinpsi;
+    double ydot = vx*sinpsi + vy*cospsi; 
+    double psidot = vpsi;
+
+    double vxdot = u(0);
+    double vydot = u(1);
+    double vpsidot = u(2);
+    double sdot = u(3);
+
+    Eigen::VectorXd out(7);
+
+    out << xdot, ydot, psidot, vxdot, vydot, vpsidot, sdot;
+
+    return out;
+}
+
+
+
+void Constrained2ndOrderModel::linearize_dynamics(const Eigen::VectorXd&x, const Eigen::VectorXd&u, Eigen::MatrixXd& J_dyn) const
+{
+    J_dyn.setZero();
+    
+    double cospsi = std::cos(x(2));
+    double sinpsi = std::sin(x(2));
+
+    double vx = x(3);
+    double vy = x(4);
+
+    J_dyn(0,2) = -vx*sinpsi - vy*cospsi;
+    J_dyn(0,3) = cospsi;
+    J_dyn(0,4) = -sinpsi;
+
+    J_dyn(1,2) = vx*cospsi - vy*sinpsi;
+    J_dyn(1,3) = sinpsi;
+    J_dyn(1,4) = cospsi;
+
+    J_dyn(2,5) = 1.0;
+
+    J_dyn(3,7) = 1.0;
+    J_dyn(4,8) = 1.0;
+    J_dyn(5,9) = 1.0;
+    J_dyn(6,10) = 1.0;
+
+}

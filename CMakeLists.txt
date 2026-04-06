@@ -13,6 +13,13 @@ add_library(mpcc_core_lib
     src/ForwardEuler.cpp
     src/Model.cpp
     src/DiffDriveModel.cpp
+    src/Constrained2ndOrderModel.cpp
+    src/RunningCost.cpp
+    src/DiffDriveCost.cpp
+    src/SecondOrderModelCost.cpp
+    #src/StageConstraintModel.cpp
+    #src/NoStageConstraints.cpp
+    #src/Constrained2ndOrderConstraints.cpp
     src/MPCC.cpp)
 
 target_include_directories(mpcc_core_lib PUBLIC
@@ -26,8 +33,12 @@ target_link_libraries(mpcc_core_lib
 
 option(BUILD_TESTS "Build all test executables" ON)
 if(BUILD_TESTS)
-    add_executable(Test1 test/main.cpp)
+    add_executable(Test1 test/test1.cpp)
     target_link_libraries(Test1 mpcc_core_lib)
+
+    add_executable(Test2 test/test2.cpp)
+    target_link_libraries(Test2 mpcc_core_lib)
+
 endif()
 
 

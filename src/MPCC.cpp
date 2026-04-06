@@ -57,28 +57,45 @@ void MPCC::config_solver_settings(int max_iter, double tol, int QP_max_iter, Pri
 
 void MPCC::configure_dynamics(DynModel model, Integ integrator)
 {
-    if (model==DIFFDRIVE)
+    switch (model)
     {
-        this->model = std::make_unique<DiffDriveModel>();
-        NX = 4;
-        NU = 3;
+        case(DIFFDRIVE):
+        {
+            this->model = std::make_unique<DiffDriveModel>();
+            runningcost = std::make_unique<DiffDriveCost>();
+            break;
+        }
+        case(BICYCLE_MODEL):
+        {
+            break;//
+        }
+        case(SECOND_ORDER_MODEL):
+        {   
+            this->model = std::make_unique<Constrained2ndOrderModel>();
+            runningcost = std::make_unique<SecondOrderModelCost>();
+            break;
+        }
     }
-    else if (model==BICYCLE_MODEL)
+    
+    switch (integrator)
     {
-        NX = 6;
-        NU = 3;
+        case(EXPL_EULER):
+        {
+            this->integrator = std::make_unique<ForwardEuler>();
+            break;
+        }
+        case(EXPL_RK4):
+        {
+            //this->integrator = std::make_unique<RK4>();
+            break;        
+        }
     }
+ 
+    NCON = 0;
+    NX = this->model->nx();
+    NU = this->model->nu();
 
-    if (integrator==EXPL_EULER)
-    {
-        this->integrator = std::make_unique<ForwardEuler>();
-    }
-    else if (integrator==EXPL_RK4)
-    {
-        //this->integrator = std::make_unique<RK4>();
-    }
-
-    NCON = NX*(N+1); // equality constraints from multiple shooting
+    NCON += NX*(N+1); // equality constraints from multiple shooting
     NVAR = NX*(N+1) + NU*N; // multiple shooting without slack variables
 
 
@@ -90,8 +107,7 @@ void MPCC::configure_dynamics(DynModel model, Integ integrator)
     lbA = Eigen::VectorXd(NCON);
     ubA = Eigen::VectorXd(NCON);
     const double INF = 1e10;
-    lbz = Eigen::VectorXd::Constant(NVAR, -INF);
-    ubz = Eigen::VectorXd::Constant(NVAR, INF);
+    
 
     r_size = 2+NU; // contour error, lag error + controls
 
@@ -109,6 +125,8 @@ void MPCC::configure_dynamics(DynModel model, Integ integrator)
     NX_Identity = Eigen::MatrixXd::Identity(NX,NX);
     NU_Identity = Eigen::MatrixXd::Identity(NU,NU);
 
+    lbz = Eigen::VectorXd::Constant(NVAR, -INF);
+    ubz = Eigen::VectorXd::Constant(NVAR, INF);
     lbx = Eigen::VectorXd::Zero(NX);
     ubx = Eigen::VectorXd::Zero(NX);
     lbu = Eigen::VectorXd::Zero(NU);
@@ -145,15 +163,11 @@ void MPCC::set_constraints(const Eigen::VectorXd& lbx, const Eigen::VectorXd&ubx
 
 Eigen::VectorXd MPCC::RK4_step(const Eigen::VectorXd& x,const Eigen::VectorXd& u)
 {
-
-    Eigen::Vector4d x_ = x.head<4>();
-    Eigen::Vector3d u_ = u.head<3>();
-
-    Eigen::Vector4d k1 = model->dynamics(x_, u_);
-    Eigen::Vector4d k2 = model->dynamics(x_ + 0.5*Ts * k1, u_);
-    Eigen::Vector4d k3 = model->dynamics(x_ + 0.5*Ts * k2, u_);
-    Eigen::Vector4d k4 = model->dynamics(x_ + Ts * k3, u_);
-    return x_ + Ts/6 *(k1 + 2*k2 +2*k3 + k4);
+    Eigen::VectorXd k1 = model->dynamics(x, u);
+    Eigen::VectorXd k2 = model->dynamics(x + 0.5*Ts * k1, u);
+    Eigen::VectorXd k3 = model->dynamics(x + 0.5*Ts * k2, u);
+    Eigen::VectorXd k4 = model->dynamics(x + Ts * k3, u);
+    return x + Ts/6 *(k1 + 2*k2 +2*k3 + k4);
     
 
 }
@@ -179,15 +193,15 @@ void MPCC::warmstart(const Eigen::VectorXd& x0)
     s_prev = x0(NX-1);
     X(NX-1,0) = current_path->local_search(s_prev, XY); 
     
-
+    
 
 
     Eigen::MatrixXd Unew(NU,N);
     Unew.leftCols(N-1) = U.rightCols(N-1);
     Unew.col(N-1) = Unew.col(N-2);
     U = Unew;
+    
     /*
-
     X.col(0) = x0;
     XY = x0.head<2>();
     s_prev = x0(NX-1);
@@ -195,8 +209,9 @@ void MPCC::warmstart(const Eigen::VectorXd& x0)
     
     for (int k = 0; k<N;++k)
     {
-        X.col(k+1) = Euler_step(X.col(k), U.col(k));
-    }*/
+        X.col(k+1) = integrator->step(*model, X.col(k), U.col(k),Ts);
+    }
+    */
 }
 
 
@@ -230,7 +245,7 @@ int MPCC::get_idx_u(int k)
 
 void MPCC::SQP_step(const Eigen::VectorXd& dz)
 {
-    double alpha= 1; //0.5, 0.8,1 works well
+    double alpha= 0.8; //0.5, 0.8,1 works well
     for (int k=0; k<N; ++k)
     {
         X.col(k) += alpha*dz.segment(get_idx_x(k), NX);
@@ -241,74 +256,24 @@ void MPCC::SQP_step(const Eigen::VectorXd& dz)
 
 void MPCC::setupQP()
 {
-    // Currently only supports diffdrive model with Euler 
     const auto Wd = W.asDiagonal();
-    Eigen::VectorXd z_k(NX+NU);
     for (int k =0; k<N; ++k)
         {
             // Linearization at z_k(bar) = [X_k, U_k]^T of the cost function
             auto state = X.col(k);
             auto control = U.col(k);
-            z_k << state, control;
-            double x = state(0);
-            double y = state(1);
-            double theta = state(2);
-            double s = state(3);
             
-            double u1 = control(0);
-            double u2 = control(1);
-            double uv = control(2); // virtual control
-
-            dat_s = current_path->evalf_diff(s);
-            double xr = dat_s.x;
-            double yr = dat_s.y;
-            double dxs = dat_s.dxs;
-            double dys = dat_s.dys;
-            double phi = dat_s.phi;
-            double dphis = dat_s.dphis;
-
-            double cosphi = std::cos(phi);
-            double sinphi = std::sin(phi);
-
-            // r_z(z_k) evaluation
-            double e_c = (x-xr)*sinphi - (y-yr)*cosphi;
-            double e_l = -(x-xr)*cosphi - (y-yr)*sinphi;
-            double e_u1 = u1; // just minimize the controls for now (u-u_prev added later on)
-            double e_u2 = u2; // ^==
-            double e_uv = uv-80; // maximize progress (adjust target value according to performance behavior) 
-            
-            r_z << e_c, e_l, e_u1, e_u2, e_uv;
+            runningcost->residual_and_jacobian(state, control, *current_path, r_z, j_r, dat_s);
 
 
-            // Jacobian j_r(z_k) entries 
-            double dcontour_x = sinphi;
-            double dcontour_y = -cosphi;
-            double dcontour_s = x*cosphi*dphis - dxs*sinphi - xr*cosphi*dphis + y*sinphi*dphis + dys*cosphi - yr*sinphi*dphis;
 
-
-            double dlag_x = -cosphi;
-            double dlag_y = -sinphi;
-            double dlag_s = x*sinphi*dphis + dxs*cosphi - xr*sinphi*dphis -y*cosphi*dphis + dys*sinphi + yr*cosphi*dphis;
-
-            
-            j_r(0,0) = dcontour_x;
-            j_r(0,1) = dcontour_y;
-            j_r(0,3) = dcontour_s;
-
-            j_r(1,0) = dlag_x;
-            j_r(1,1) = dlag_y;
-            j_r(1,3) = dlag_s;
-            j_r.block(2,NX, NU,NU) = NU_Identity;
-
+            // QP Cost
             g.segment(k*(NX+NU), NX+NU) += j_r.transpose() * Wd * r_z;
-
             H.block(k*(NX+NU), k*(NX+NU), NX+NU,NX+NU) += j_r.transpose() * Wd * j_r;
             
-            auto next_state = integrator->step(*model, state, control, Ts);
-
-
 
             // multiple shooting constraints
+            auto next_state = integrator->step(*model, state, control, Ts);
             dyn_dev = X.col(k+1) - next_state;
             integrator->linearize_step(*model, state, control, Ts, J_dyn, J_func);
 
@@ -324,6 +289,8 @@ void MPCC::setupQP()
 
             
         }
+    lbz.segment(get_idx_x(N),NX) = lbx - X.col(N);
+    ubz.segment(get_idx_x(N),NX) = ubx - X.col(N);
     H.diagonal().array() +=1e-6;
 }
 
@@ -354,7 +321,7 @@ void MPCC::solve(const Eigen::VectorXd& x0)
         int NWSR = sol_settings.QP_max_iter;
         
         setupQP();
-
+        std::cout << "H diag min/max: " << H.diagonal().minCoeff() << " " << H.diagonal().maxCoeff() << "\n";
         if (!init)
         {
             ret = qpprob.init(H.data(),

@@ -5,6 +5,9 @@
 #include "qpOASES.hpp"
 #include "ForwardEuler.hpp"
 #include "DiffDriveModel.hpp"
+#include "DiffDriveCost.hpp"
+#include "Constrained2ndOrderModel.hpp"
+#include "SecondOrderModelCost.hpp"
 #include <memory>
 #include <chrono>
 
@@ -13,7 +16,8 @@ using RowMajorMat = Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen:
 
 enum DynModel{
     DIFFDRIVE = 0,
-    BICYCLE_MODEL = 1
+    BICYCLE_MODEL = 1,
+    SECOND_ORDER_MODEL = 2
 };
 
 enum Integ{
@@ -45,6 +49,7 @@ class MPCC
 private:
     std::unique_ptr<Model> model;
     std::unique_ptr<Integrator> integrator;
+    std::unique_ptr<RunningCost> runningcost;
     ParametricSpline* current_path;
 
 
