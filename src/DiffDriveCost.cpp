@@ -7,7 +7,6 @@ void DiffDriveCost::residual_and_jacobian(const Eigen::VectorXd&state,const Eige
         //z_k << state, control;
         double x = state(0);
         double y = state(1);
-        double theta = state(2);
         double s = state(3);
         
         double u1 = control(0);

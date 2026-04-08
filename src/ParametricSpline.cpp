@@ -129,6 +129,10 @@ PathDat ParametricSpline::evalf_diff(double s)
     return eval;
 }
 
+double ParametricSpline::get_path_length()
+{
+    return s_.back();
+}
 
 double ParametricSpline::local_search(const double initial_guess, const Eigen::Vector2d& point)
 {

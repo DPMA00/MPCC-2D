@@ -8,6 +8,10 @@
 #include "DiffDriveCost.hpp"
 #include "Constrained2ndOrderModel.hpp"
 #include "SecondOrderModelCost.hpp"
+#include "ExtendedBicycleModel.hpp"
+#include "ExtendedBicycleCost.hpp"
+#include "NoConstraints.hpp"
+#include "Constrained2ndOrderConstraints.hpp"
 #include <memory>
 #include <chrono>
 
@@ -16,7 +20,7 @@ using RowMajorMat = Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen:
 
 enum DynModel{
     DIFFDRIVE = 0,
-    BICYCLE_MODEL = 1,
+    EXTENDED_BICYCLE_MODEL = 1,
     SECOND_ORDER_MODEL = 2
 };
 
@@ -50,6 +54,7 @@ private:
     std::unique_ptr<Model> model;
     std::unique_ptr<Integrator> integrator;
     std::unique_ptr<RunningCost> runningcost;
+    std::unique_ptr<RunningConstraintModel> constraints;
     ParametricSpline* current_path;
 
 
@@ -60,6 +65,7 @@ private:
 
     int N;
     double Ts;
+    int stage_const;
     int NX;
     int NU;
     int NCON;

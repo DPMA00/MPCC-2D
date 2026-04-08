@@ -17,9 +17,11 @@ add_library(mpcc_core_lib
     src/RunningCost.cpp
     src/DiffDriveCost.cpp
     src/SecondOrderModelCost.cpp
-    #src/StageConstraintModel.cpp
-    #src/NoStageConstraints.cpp
-    #src/Constrained2ndOrderConstraints.cpp
+    src/ExtendedBicycleModel.cpp
+    src/ExtendedBicycleCost.cpp
+    src/RunningConstraintModel.cpp
+    src/NoConstraints.cpp
+    src/Constrained2ndOrderConstraints.cpp
     src/MPCC.cpp)
 
 target_include_directories(mpcc_core_lib PUBLIC
@@ -38,6 +40,9 @@ if(BUILD_TESTS)
 
     add_executable(Test2 test/test2.cpp)
     target_link_libraries(Test2 mpcc_core_lib)
+
+    #add_executable(Test3 test/test3.cpp)
+    #target_link_libraries(Test3 mpcc_core_lib)
 
 endif()
 

@@ -8,10 +8,9 @@ class Constrained2ndOrderModel : public Model
 private:
     Eigen::MatrixXd I_NX_;
     Eigen::MatrixXd I_NU_;
-    Eigen::MatrixXd A_mat;
-    Eigen::VectorXd B_vec;
 
 public:
+
     int nx() const override {return 7;}
     int nu() const override {return 4;}
     const Eigen::MatrixXd& I_NX() const override {return I_NX_;}

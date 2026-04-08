@@ -53,6 +53,7 @@ public:
     
     void set_proj_method(ProjMethod& method);
     void update_path(const waypoints& points);
+    double get_path_length();
     std::vector<double> get_arc_lengths() const;
     PathDat evalf_diff(double s);
     double local_search(const double initial_guess, const Eigen::Vector2d& point);

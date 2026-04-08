@@ -5,9 +5,11 @@ A C++ library in development for **Model Predictive Contouring Control (MPCC)** 
 The library will support:
 
 * Differential drive vehicles
-* Kinematic bicycle vehicles for Ackermann-style steering
+* Extended bicycle type models (kinematic & dynamic)
 
 Given a path or track description, the library allows construction of a **parametric path representation** that is passed to the MPCC. The controller then solves the resulting nonlinear optimal control problem using **Sequential Quadratic Programming (SQP)**.
+
+Test tracks can be found here: https://github.com/TUMFTM/racetrack-database
 
 ## Example Workflow (likely to have changes)
 

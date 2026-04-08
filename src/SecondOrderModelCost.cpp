@@ -32,7 +32,7 @@ void SecondOrderModelCost::residual_and_jacobian(const Eigen::VectorXd& state,co
     double e_u1 = u1; // just minimize the controls for now (u-u_prev added later on)
     double e_u2 = u2; // ^==
     double e_u3 = u3;
-    double e_uv = uv-55; // maximize progress (adjust target value according to performance behavior) 
+    double e_uv = uv-40; // maximize progress (adjust target value according to performance behavior) 
     
     res << e_c, e_l, e_u1, e_u2, e_u3, e_uv;
 

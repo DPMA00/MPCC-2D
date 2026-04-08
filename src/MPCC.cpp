@@ -63,16 +63,21 @@ void MPCC::configure_dynamics(DynModel model, Integ integrator)
         {
             this->model = std::make_unique<DiffDriveModel>();
             runningcost = std::make_unique<DiffDriveCost>();
+            constraints = std::make_unique<NoConstraints>();
             break;
         }
-        case(BICYCLE_MODEL):
+        case(EXTENDED_BICYCLE_MODEL):
         {
+            this->model = std::make_unique<ExtendedBicycleModel>();
+            runningcost = std::make_unique<ExtendedBicycleCost>();
+            constraints = std::make_unique<NoConstraints>();
             break;//
         }
         case(SECOND_ORDER_MODEL):
         {   
             this->model = std::make_unique<Constrained2ndOrderModel>();
             runningcost = std::make_unique<SecondOrderModelCost>();
+            constraints = std::make_unique<Constrained2ndOrderConstraints>();
             break;
         }
     }
@@ -91,11 +96,10 @@ void MPCC::configure_dynamics(DynModel model, Integ integrator)
         }
     }
  
-    NCON = 0;
+    stage_const = constraints->NrConstraints(); // per stage
     NX = this->model->nx();
     NU = this->model->nu();
-
-    NCON += NX*(N+1); // equality constraints from multiple shooting
+    NCON = NX*(N+1) + stage_const*N; // add equality constraints from multiple shooting and stage constraints for full prediction horizon
     NVAR = NX*(N+1) + NU*N; // multiple shooting without slack variables
 
 
@@ -245,7 +249,7 @@ int MPCC::get_idx_u(int k)
 
 void MPCC::SQP_step(const Eigen::VectorXd& dz)
 {
-    double alpha= 0.8; //0.5, 0.8,1 works well
+    double alpha= 1.0; //0.5, 0.8,1 works well
     for (int k=0; k<N; ++k)
     {
         X.col(k) += alpha*dz.segment(get_idx_x(k), NX);
@@ -257,6 +261,7 @@ void MPCC::SQP_step(const Eigen::VectorXd& dz)
 void MPCC::setupQP()
 {
     const auto Wd = W.asDiagonal();
+    int const_begin = NX*(N+1);
     for (int k =0; k<N; ++k)
         {
             // Linearization at z_k(bar) = [X_k, U_k]^T of the cost function
@@ -273,18 +278,25 @@ void MPCC::setupQP()
             
 
             // multiple shooting constraints
+            int mps_row = NX*(k+1);
+
             auto next_state = integrator->step(*model, state, control, Ts);
             dyn_dev = X.col(k+1) - next_state;
             integrator->linearize_step(*model, state, control, Ts, J_dyn, J_func);
 
-            A.block(NX*(k+1), (NX+NU)*k, NX, NX+NU) = J_func;
-            A.block(NX*(k+1), (NX+NU)*(k+1), NX,NX) = -NX_Identity;
-            lbA.segment((k+1)*NX, NX) = dyn_dev;
-            ubA.segment((k+1)*NX, NX) = dyn_dev;
+            A.block(mps_row, (NX+NU)*k, NX, NX+NU) = J_func;
+            A.block(mps_row, (NX+NU)*(k+1), NX,NX) = -NX_Identity;
+            lbA.segment(mps_row, NX) = dyn_dev;
+            ubA.segment(mps_row, NX) = dyn_dev;
             lbz.segment(get_idx_x(k),NX) = lbx - X.col(k);
             lbz.segment(get_idx_u(k),NU) = lbu - U.col(k);
             ubz.segment(get_idx_x(k),NX) = ubx - X.col(k);
             ubz.segment(get_idx_u(k),NU) = ubu - U.col(k);
+
+
+            int row = const_begin + k*stage_const;
+
+            constraints->add_constraint(A, lbA, ubA,row, get_idx_x(k),get_idx_u(k),state,control);
             j_r.setZero(); // reset the cost jacobians
 
             

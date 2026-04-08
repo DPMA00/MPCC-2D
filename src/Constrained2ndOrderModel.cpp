@@ -2,11 +2,18 @@
 
 
 Constrained2ndOrderModel::Constrained2ndOrderModel()
-: I_NX_(Eigen::MatrixXd::Identity(7,7)), I_NU_(Eigen::Matrix4d::Identity(4,4)), A_mat(Eigen::MatrixXd::Zero(6,3)), B_vec(Eigen::VectorXd::Zero(6))
-{}
+: I_NX_(Eigen::MatrixXd::Identity(7,7)), I_NU_(Eigen::Matrix4d::Identity(4,4))
+{
+}
 
 Eigen::VectorXd Constrained2ndOrderModel::dynamics(const Eigen::VectorXd& x, const Eigen::VectorXd&u) const
 {
+
+    /*
+        Dynamic model requires a constrained acceleration envelope based on experimental data.
+        More details found in: https://arxiv.org/pdf/1703.01225 
+
+    */
     double cospsi = std::cos(x(2));
     double sinpsi = std::sin(x(2));
 
