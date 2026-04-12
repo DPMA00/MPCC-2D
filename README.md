@@ -44,4 +44,9 @@ Test tracks can be found here: https://github.com/TUMFTM/racetrack-database
 11. Retrieve the controls by calling **get_solution()**.
 
 
+### Demo
+
+<img width="1000" alt="Suzuka demo" src="https://github.com/user-attachments/assets/4cbf4ea2-08fa-4e9a-bea8-67c5b55b8e42" />
+
+
 
