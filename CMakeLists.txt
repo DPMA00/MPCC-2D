@@ -13,7 +13,7 @@ add_library(mpcc_core_lib
     src/ForwardEuler.cpp
     src/Model.cpp
     src/DiffDriveModel.cpp
-    src/Constrained2ndOrderModel.cpp
+    src/SecondOrderModel.cpp
     src/RunningCost.cpp
     src/DiffDriveCost.cpp
     src/SecondOrderModelCost.cpp
@@ -21,7 +21,7 @@ add_library(mpcc_core_lib
     src/ExtendedBicycleCost.cpp
     src/RunningConstraintModel.cpp
     src/NoConstraints.cpp
-    src/Constrained2ndOrderConstraints.cpp
+    src/SecondOrderModelConstraints.cpp
     src/MPCC.cpp)
 
 target_include_directories(mpcc_core_lib PUBLIC

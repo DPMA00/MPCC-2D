@@ -85,7 +85,7 @@ int main()
     mpcc.config_solver_settings(1, 1e-3, 50, PRINT_LEVEL_NONE);
 
 
-    waypoints points = load_track_csv("/path/to/track.csv");
+    waypoints points = load_track_csv("/home/dpma/projects/mpcc_core/racetrack-database-master/tracks/Monza.csv");
     
     mpcc.update_path(points);
 
@@ -127,6 +127,11 @@ int main()
         traj_x.push_back(x0(0));
         traj_y.push_back(x0(1));
         vel.push_back(u(0));
+        if (x0(6) >= spline.get_path_length() -1.0)
+        {        
+            std::cout << "Lap time: " << (i+1)*0.1 << " seconds";
+            break;
+        }
     }
     double duplicate = vel.back();
     vel.push_back(duplicate);

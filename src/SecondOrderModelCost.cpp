@@ -1,6 +1,6 @@
 #include "SecondOrderModelCost.hpp"
 
-void SecondOrderModelCost::residual_and_jacobian(const Eigen::VectorXd& state,const Eigen::VectorXd& control, ParametricSpline& path,
+PathDat SecondOrderModelCost::residual_and_jacobian(const Eigen::VectorXd& state,const Eigen::VectorXd& control, ParametricSpline& path,
         Eigen::VectorXd& res, Eigen::MatrixXd& j_r, PathDat& dat_s) const
 {
     // Linearization at z_k(bar) = [X_k, U_k]^T of the cost function
@@ -32,7 +32,7 @@ void SecondOrderModelCost::residual_and_jacobian(const Eigen::VectorXd& state,co
     double e_u1 = u1; // just minimize the controls for now (u-u_prev added later on)
     double e_u2 = u2; // ^==
     double e_u3 = u3;
-    double e_uv = uv-40; // maximize progress (adjust target value according to performance behavior) 
+    double e_uv = uv-85; // maximize progress (adjust target value according to performance behavior) 
     
     res << e_c, e_l, e_u1, e_u2, e_u3, e_uv;
 
@@ -56,4 +56,6 @@ void SecondOrderModelCost::residual_and_jacobian(const Eigen::VectorXd& state,co
     j_r(1,1) = dlag_y;
     j_r(1,6) = dlag_s;
     j_r.block(2,7, 4,4) = Eigen::Matrix4d::Identity(4,4);
+
+    return dat_s;
 }

@@ -10,7 +10,7 @@ public:
 
     ~DiffDriveCost() override = default;
 
-    void residual_and_jacobian(const Eigen::VectorXd& state,const Eigen::VectorXd& control, ParametricSpline& path,
+    PathDat residual_and_jacobian(const Eigen::VectorXd& state,const Eigen::VectorXd& control, ParametricSpline& path,
         Eigen::VectorXd& res, Eigen::MatrixXd& j_r, PathDat& dat_s) const override;
 };
 

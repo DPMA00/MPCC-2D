@@ -75,9 +75,9 @@ void MPCC::configure_dynamics(DynModel model, Integ integrator)
         }
         case(SECOND_ORDER_MODEL):
         {   
-            this->model = std::make_unique<Constrained2ndOrderModel>();
+            this->model = std::make_unique<SecondOrderModel>();
             runningcost = std::make_unique<SecondOrderModelCost>();
-            constraints = std::make_unique<Constrained2ndOrderConstraints>();
+            constraints = std::make_unique<SecondOrderModelConstraints>();
             break;
         }
     }
@@ -96,12 +96,17 @@ void MPCC::configure_dynamics(DynModel model, Integ integrator)
         }
     }
  
+    NSLACK = 0;
     stage_const = constraints->NrConstraints(); // per stage
+    NSLACK+=this->model->nS();
+    W_S = this->model->W_S();
+
+
     NX = this->model->nx();
     NU = this->model->nu();
     NCON = NX*(N+1) + stage_const*N; // add equality constraints from multiple shooting and stage constraints for full prediction horizon
     NVAR = NX*(N+1) + NU*N; // multiple shooting without slack variables
-
+    NVAR += NSLACK*N; // add slack variables;
 
     qpprob = qpOASES::SQProblem(NVAR,NCON);
 
@@ -129,12 +134,20 @@ void MPCC::configure_dynamics(DynModel model, Integ integrator)
     NX_Identity = Eigen::MatrixXd::Identity(NX,NX);
     NU_Identity = Eigen::MatrixXd::Identity(NU,NU);
 
+
+    S = Eigen::MatrixXd::Zero(NSLACK,N);
+
+
     lbz = Eigen::VectorXd::Constant(NVAR, -INF);
     ubz = Eigen::VectorXd::Constant(NVAR, INF);
+
     lbx = Eigen::VectorXd::Zero(NX);
     ubx = Eigen::VectorXd::Zero(NX);
     lbu = Eigen::VectorXd::Zero(NU);
     ubu = Eigen::VectorXd::Zero(NU);
+    
+    lbS = Eigen::VectorXd::Zero(NSLACK);
+    ubS = Eigen::VectorXd::Constant(NSLACK,40); // will be modified later...
 }
 
 
@@ -205,6 +218,11 @@ void MPCC::warmstart(const Eigen::VectorXd& x0)
     Unew.col(N-1) = Unew.col(N-2);
     U = Unew;
     
+
+    Eigen::MatrixXd S_new(NSLACK,N);
+    S_new.leftCols(N-1) = S.rightCols(N-1);
+    S_new.col(N-1) = S_new.col(N-2);
+    S = S_new;
     /*
     X.col(0) = x0;
     XY = x0.head<2>();
@@ -245,7 +263,10 @@ int MPCC::get_idx_u(int k)
     return k*(NX+NU) + NX;
 }
 
-
+int MPCC::get_idx_S(int k)
+{
+    return NX*(N+1) + NU*N + NSLACK*k;
+}
 
 void MPCC::SQP_step(const Eigen::VectorXd& dz)
 {
@@ -254,6 +275,7 @@ void MPCC::SQP_step(const Eigen::VectorXd& dz)
     {
         X.col(k) += alpha*dz.segment(get_idx_x(k), NX);
         U.col(k) += alpha*dz.segment(get_idx_u(k), NU);
+        S.col(k) += alpha*dz.segment(get_idx_S(k), NSLACK);
     }
     X.col(N) += alpha*dz.segment(get_idx_x(N), NX);
 }
@@ -261,21 +283,25 @@ void MPCC::SQP_step(const Eigen::VectorXd& dz)
 void MPCC::setupQP()
 {
     const auto Wd = W.asDiagonal();
+    const auto W_S_d = W_S.asDiagonal();
     int const_begin = NX*(N+1);
     for (int k =0; k<N; ++k)
         {
-            // Linearization at z_k(bar) = [X_k, U_k]^T of the cost function
+            // Linearization at z_k(bar) = [X_k, U_k]^T of the cost function + additional slack variables 
             auto state = X.col(k);
             auto control = U.col(k);
+            auto slacks = S.col(k);
+
+            // update jacobian and residuals and return pathdata (useful for curvature aware constraints)
+            dat_s = runningcost->residual_and_jacobian(state, control, *current_path, r_z, j_r, dat_s);
             
-            runningcost->residual_and_jacobian(state, control, *current_path, r_z, j_r, dat_s);
-
-
+            // Slacks Jacobian is zero in all entries except for the slacks at the current iterate k => identity matrix (NSLACK,NSLACK)
 
             // QP Cost
-            g.segment(k*(NX+NU), NX+NU) += j_r.transpose() * Wd * r_z;
-            H.block(k*(NX+NU), k*(NX+NU), NX+NU,NX+NU) += j_r.transpose() * Wd * j_r;
-            
+            g.segment(get_idx_x(k), NX+NU) += j_r.transpose() * Wd * r_z;
+            H.block(get_idx_x(k), get_idx_x(k), NX+NU,NX+NU) += j_r.transpose() * Wd * j_r;
+            g.segment(get_idx_S(k), NSLACK) += W_S_d * slacks;
+            H.block(get_idx_S(k), get_idx_S(k), NSLACK, NSLACK) += W_S_d; 
 
             // multiple shooting constraints
             int mps_row = NX*(k+1);
@@ -288,15 +314,18 @@ void MPCC::setupQP()
             A.block(mps_row, (NX+NU)*(k+1), NX,NX) = -NX_Identity;
             lbA.segment(mps_row, NX) = dyn_dev;
             ubA.segment(mps_row, NX) = dyn_dev;
-            lbz.segment(get_idx_x(k),NX) = lbx - X.col(k);
-            lbz.segment(get_idx_u(k),NU) = lbu - U.col(k);
-            ubz.segment(get_idx_x(k),NX) = ubx - X.col(k);
-            ubz.segment(get_idx_u(k),NU) = ubu - U.col(k);
 
+            lbz.segment(get_idx_x(k),NX) = lbx - state;
+            lbz.segment(get_idx_u(k),NU) = lbu - control;
+            lbz.segment(get_idx_S(k),NSLACK) = lbS - slacks;
+
+            ubz.segment(get_idx_x(k),NX) = ubx - state;
+            ubz.segment(get_idx_u(k),NU) = ubu - control;
+            ubz.segment(get_idx_S(k),NSLACK) = ubS - slacks;
 
             int row = const_begin + k*stage_const;
 
-            constraints->add_constraint(A, lbA, ubA,row, get_idx_x(k),get_idx_u(k),state,control);
+            constraints->add_constraint(A, lbA, ubA,row, get_idx_x(k),get_idx_u(k), get_idx_S(k),state,control,slacks, dat_s);
             j_r.setZero(); // reset the cost jacobians
 
             

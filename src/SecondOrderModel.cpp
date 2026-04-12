@@ -1,12 +1,13 @@
-#include "Constrained2ndOrderModel.hpp"
+#include "SecondOrderModel.hpp"
 
 
-Constrained2ndOrderModel::Constrained2ndOrderModel()
-: I_NX_(Eigen::MatrixXd::Identity(7,7)), I_NU_(Eigen::Matrix4d::Identity(4,4))
+SecondOrderModel::SecondOrderModel()
+: I_NX_(Eigen::MatrixXd::Identity(7,7)), I_NU_(Eigen::Matrix4d::Identity(4,4)), W_S_(Eigen::VectorXd(1))
 {
+    W_S_ << 1500;
 }
 
-Eigen::VectorXd Constrained2ndOrderModel::dynamics(const Eigen::VectorXd& x, const Eigen::VectorXd&u) const
+Eigen::VectorXd SecondOrderModel::dynamics(const Eigen::VectorXd& x, const Eigen::VectorXd&u) const
 {
 
     /*
@@ -39,7 +40,7 @@ Eigen::VectorXd Constrained2ndOrderModel::dynamics(const Eigen::VectorXd& x, con
 
 
 
-void Constrained2ndOrderModel::linearize_dynamics(const Eigen::VectorXd&x, const Eigen::VectorXd&u, Eigen::MatrixXd& J_dyn) const
+void SecondOrderModel::linearize_dynamics(const Eigen::VectorXd&x, const Eigen::VectorXd&u, Eigen::MatrixXd& J_dyn) const
 {
     J_dyn.setZero();
     

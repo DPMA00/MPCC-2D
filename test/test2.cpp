@@ -78,24 +78,24 @@ waypoints load_track_csv(const std::string& filename)
 int main()
 {
     ParametricSpline spline(T2_NATURAL_BOUNDARY_SPLINE);    
-    MPCC mpcc(15, 0.1, spline);
+    MPCC mpcc(20, 0.1, spline);
 
     mpcc.configure_dynamics(SECOND_ORDER_MODEL, EXPL_EULER);
     mpcc.config_projection(NEWTON_STEP, 20, 1.0e-6);
-    mpcc.config_solver_settings(1, 1e-3, 300, PRINT_LEVEL_SIMPLE);
+    mpcc.config_solver_settings(1, 1e-3, 300, PRINT_LEVEL_NONE);
 
 
-    waypoints points = load_track_csv("/path/to/track.csv");
+    waypoints points = load_track_csv("/home/dpma/projects/mpcc_core/racetrack-database-master/tracks/Suzuka.csv");
     
     mpcc.update_path(points);
     auto dat = spline.evalf_diff(0.0);
     Eigen::VectorXd x0(7);
     x0 << dat.x, dat.y, dat.phi+M_PI/2, 0, 0, 0, 0;
     Eigen::VectorXd Q(2);
-    Q<< 300, 200;
+    Q<< 300, 300;
 
     Eigen::VectorXd R(4);
-    R<<1,1,1,3;
+    R<<1,1,1,10;
 
     mpcc.set_weigths(Q, R);
 
@@ -108,13 +108,13 @@ int main()
     const double BIG = 1e6;
 
     lbx << -BIG, -BIG, -BIG,   0.0, -3.0, -1.0,  0.0;
-    ubx <<  BIG,  BIG,  BIG,  30.0,  3.0,  1.0,  BIG;
+    ubx <<  BIG,  BIG,  BIG,  80,  3.0,  1.0,  BIG;
 
-    lbu << -10.0, -10.0, -7.0,  0.0;
-    ubu <<  10.0,  10.0,  7.0, 30.0;
+    lbu << -20.0, -20.0, -7.0,  0.0;
+    ubu <<  20.0,  20.0,  7.0, 100.0;
 
     mpcc.set_constraints(lbx, ubx, lbu, ubu);
-    int steps = 1500;//;
+    int steps = 1800;//;
     std::vector<double> traj_x;
     std::vector<double> traj_y;
     std::vector<double> vel;
@@ -130,7 +130,11 @@ int main()
         traj_x.push_back(x0(0));
         traj_y.push_back(x0(1));
         vel.push_back(x0(3));
-        if (std::abs(x0(6)-spline.get_path_length())<=0.1) break;
+        if (x0(6) >= spline.get_path_length() -1.0)
+        {        
+            std::cout << "Lap time: " << (i+1)*0.1 << " seconds";
+            break;
+        }
     }
     double duplicate = vel.back();
     vel.push_back(duplicate);

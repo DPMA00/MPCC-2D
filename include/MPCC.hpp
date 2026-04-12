@@ -6,12 +6,12 @@
 #include "ForwardEuler.hpp"
 #include "DiffDriveModel.hpp"
 #include "DiffDriveCost.hpp"
-#include "Constrained2ndOrderModel.hpp"
+#include "SecondOrderModel.hpp"
 #include "SecondOrderModelCost.hpp"
+#include "SecondOrderModelConstraints.hpp"
 #include "ExtendedBicycleModel.hpp"
 #include "ExtendedBicycleCost.hpp"
 #include "NoConstraints.hpp"
-#include "Constrained2ndOrderConstraints.hpp"
 #include <memory>
 #include <chrono>
 
@@ -70,6 +70,7 @@ private:
     int NU;
     int NCON;
     int NVAR;
+    int NSLACK;
     int r_size;
     bool solved;
     
@@ -79,6 +80,7 @@ private:
 
     Eigen::MatrixXd X;
     Eigen::MatrixXd U;
+    Eigen::MatrixXd S;
 
     Eigen::VectorXd dZ;
 
@@ -99,10 +101,14 @@ private:
     Eigen::VectorXd ubx;
     Eigen::VectorXd lbu;
     Eigen::VectorXd ubu;
+    Eigen::VectorXd lbS;
+    Eigen::VectorXd ubS;
 
     Eigen::VectorXd W;
     Eigen::VectorXd r_z;
     Eigen::MatrixXd j_r;
+    
+    Eigen::VectorXd W_S; // slack weights
 
     Eigen::MatrixXd J_func;
     Eigen::MatrixXd J_dyn;
@@ -113,6 +119,7 @@ private:
 
     int get_idx_x(int k);
     int get_idx_u(int k);
+    int get_idx_S(int k);
 
     void SQP_step(const Eigen::VectorXd& dz);
     void setupQP();
@@ -130,6 +137,8 @@ public:
     void set_weigths(const Eigen::VectorXd& Qe, const Eigen::VectorXd& Ru);
     void set_constraints(const Eigen::VectorXd& lbx, const Eigen::VectorXd&ubx,
                         const Eigen::VectorXd& lbu, const Eigen::VectorXd&ubu);
+    void add_slackvariables(int nr);
+    void set_slackweigths(const Eigen::VectorXd& Q_S);
 
     void solve(const Eigen::VectorXd& x0);
     void update_path(const waypoints& points);

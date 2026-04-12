@@ -1,6 +1,6 @@
 #include "DiffDriveCost.hpp"
 
-void DiffDriveCost::residual_and_jacobian(const Eigen::VectorXd&state,const Eigen::VectorXd& control, ParametricSpline& path, Eigen::VectorXd& res,
+PathDat DiffDriveCost::residual_and_jacobian(const Eigen::VectorXd&state,const Eigen::VectorXd& control, ParametricSpline& path, Eigen::VectorXd& res,
      Eigen::MatrixXd& j_r, PathDat& dat_s) const
 {
     // Linearization at z_k(bar) = [X_k, U_k]^T of the cost function
@@ -53,4 +53,6 @@ void DiffDriveCost::residual_and_jacobian(const Eigen::VectorXd&state,const Eige
         j_r(1,1) = dlag_y;
         j_r(1,3) = dlag_s;
         j_r.block(2,4, 3,3) = Eigen::Matrix3d::Identity(3,3);
+
+        return dat_s;
 }

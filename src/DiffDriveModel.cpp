@@ -1,7 +1,7 @@
 #include "DiffDriveModel.hpp"
 
 DiffDriveModel::DiffDriveModel()
-: I_NX_(Eigen::Matrix4d::Identity(4,4)), I_NU_(Eigen::Matrix3d::Identity(3,3))
+: I_NX_(Eigen::Matrix4d::Identity(4,4)), I_NU_(Eigen::Matrix3d::Identity(3,3)), W_S_(Eigen::VectorXd(0))
 {}
 
 

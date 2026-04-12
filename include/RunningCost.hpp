@@ -10,7 +10,7 @@ class RunningCost
 public:
     virtual ~RunningCost() = default;
 
-    virtual void residual_and_jacobian(const Eigen::VectorXd& state,const Eigen::VectorXd& control,
+    virtual PathDat residual_and_jacobian(const Eigen::VectorXd& state,const Eigen::VectorXd& control,
                 ParametricSpline& path, Eigen::VectorXd& res, Eigen::MatrixXd& j_r, PathDat& dat_s) const = 0;
 
 };
